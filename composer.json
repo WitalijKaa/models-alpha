@@ -1,0 +1,17 @@
+{
+  "name": "witalijkaa/models-alpha",
+  "description": "Base models for PHP",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": "^8.5",
+    "nesbot/carbon": "^3"
+  },
+  "autoload": {
+    "psr-4": {
+      "ModelsAlpha\\": "src/"
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

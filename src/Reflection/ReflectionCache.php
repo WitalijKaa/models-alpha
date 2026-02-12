@@ -9,7 +9,7 @@ class ReflectionCache
     public static function prepare(string $class): void
     {
         if (empty(ReflectionCache::$repo[$class])) {
-            ReflectionCache::$repo[$class] = SmartReflectionBuilder::getSmartReflection($class);
+            ReflectionCache::$repo[$class] = ReflectionBuilder::getReflection($class);
         }
     }
 }

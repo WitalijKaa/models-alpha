@@ -4,12 +4,12 @@ namespace ModelsAlpha\Reflection;
 
 use ModelsAlpha\Helpers\Str;
 
-class SmartReflectionBuilder
+class ReflectionBuilder
 {
-    public static function getSmartReflection(string $class): SmartReflectionDto
+    public static function getReflection(string $class): ReflectionDto
     {
         $R = new \ReflectionClass($class);
-        $dto = new SmartReflectionDto();
+        $dto = new ReflectionDto();
         static::propertiesReflection($dto, $R);
         $methods = $R->getMethods();
         $dto->attributes = static::attributesReflection($methods);
@@ -18,7 +18,7 @@ class SmartReflectionBuilder
     }
 
 
-    private static function propertiesReflection(SmartReflectionDto $dto, \ReflectionClass $R): void
+    private static function propertiesReflection(ReflectionDto $dto, \ReflectionClass $R): void
     {
         $dto->construct = [];
         $dto->fields = [];
@@ -26,14 +26,14 @@ class SmartReflectionBuilder
         foreach ($R->getProperties() as $refProperty) {
             if ($refProperty->isPublic() && !$refProperty->isReadOnly() && !$refProperty->isStatic()) {
                 if ($refProperty->isPromoted()) {
-                    $dto->construct[$refProperty->getName()] = new SmartReflectionProperty($refProperty);
+                    $dto->construct[$refProperty->getName()] = new ReflectionProperty($refProperty);
                 }
                 else {
-                    $smartProp = $dto->fields[$refProperty->getName()] = new SmartReflectionProperty($refProperty);
+                    $refProp = $dto->fields[$refProperty->getName()] = new ReflectionProperty($refProperty);
                 }
             }
-            if (!empty($smartProp) && $smartProp->hardName) {
-                $dto->hardNames[$smartProp->hardName] = $smartProp->name;
+            if (!empty($refProp) && $refProp->hardName) {
+                $dto->hardNames[$refProp->hardName] = $refProp->name;
             }
         }
     }

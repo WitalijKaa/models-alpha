@@ -6,7 +6,8 @@ use Carbon\Carbon;
 use JsonSerializable;
 use ModelsAlpha\Helpers\Collection;
 use ModelsAlpha\Reflection\ReflectionCache;
-use ModelsAlpha\Reflection\SmartReflectionDto;
+use ModelsAlpha\Reflection\ReflectionDto;
+use ModelsAlpha\Reflection\ReflectionProperty;
 
 abstract class BaseModel implements JsonSerializable {
 
@@ -48,47 +49,47 @@ abstract class BaseModel implements JsonSerializable {
         foreach ($item as $field => $value) {
             $field = $ref->hardNames[$field] ?? $field;
 
-            if (!$smartProp = $ref->fields[$field] ?? null) {
+            if (!$refProp = $ref->fields[$field] ?? null) {
                 continue;
             }
             $handledFields[$field] = true;
 
             if (is_null($value)) {
-                if ($smartProp->allowsNull) {
+                if ($refProp->allowsNull) {
                     $model->$field = null;
                 }
                 continue;
             }
 
-            if ($smartProp->isCollection) {
+            if ($refProp->isCollection) {
                 $model->$field = new static::$collectionClasses[0]();
                 if (empty($value) || !is_array($value)) {
                     continue;
                 }
             }
 
-            $class = $smartProp->getCastClass();
+            $class = $refProp->getCastClass();
             /** @var string|BaseModel|mixed $class */
 
-            if ($smartProp->isCollection && is_array($value)) {
-                if ($onlyOneItemClass = $smartProp->findOnlyOneClassOfCollection()) {
+            if ($refProp->isCollection && is_array($value)) {
+                if ($onlyOneItemClass = $refProp->findOnlyOneClassOfCollection()) {
                     /** @var string|BaseModel|mixed $onlyOneItemClass */
                     foreach ($value as $subItem) {
-                        $model->$field->add($smartProp->isClassOfCollectionSubClassOfBaseModel($onlyOneItemClass) ? $onlyOneItemClass::fromArray($subItem) : new $onlyOneItemClass(...$value));
+                        $model->$field->add($refProp->isClassOfCollectionSubClassOfBaseModel($onlyOneItemClass) ? $onlyOneItemClass::fromArray($subItem) : new $onlyOneItemClass(...$value));
                     }
                 } else {
                     foreach ($value as $subItem) {
-                        $itemClass = $smartProp->guessClassOfCollection($subItem, [static::class, 'getRef']);
+                        $itemClass = $refProp->guessClassOfCollection($subItem, [static::class, 'getRef']);
                         /** @var string|BaseModel|mixed $itemClass */
-                        $model->$field->add($smartProp->isClassOfCollectionSubClassOfBaseModel($itemClass) ? $itemClass::fromArray($subItem) : new $itemClass(...$value));
+                        $model->$field->add($refProp->isClassOfCollectionSubClassOfBaseModel($itemClass) ? $itemClass::fromArray($subItem) : new $itemClass(...$value));
                     }
                 }
             }
-            else if ($smartProp->isCarbon and is_string($value)) {
-                $smartProp->makeCarbon($value, $field, $model);
+            else if ($refProp->isCarbon and is_string($value)) {
+                $refProp->makeCarbon($value, $field, $model);
             }
             else if ($class && is_array($value)) {
-                $model->$field = $smartProp->isClassForeign ? new $class(...$value) : $class::byArr($value);
+                $model->$field = $refProp->isClassForeign ? new $class(...$value) : $class::byArr($value);
             }
             else {
                 $model->$field = $value;
@@ -104,22 +105,22 @@ abstract class BaseModel implements JsonSerializable {
     private static function makeWithConstructor(array $item): static
     {
         $construct = [];
-        foreach (array_intersect_key(static::ref()->construct, $item) as $key => $val) {
-            $construct[$key] = $item[$key];
+        foreach (array_intersect_key(static::ref()->construct, $item) as $propName => $val) {
+            $construct[$propName] = $item[$propName];
         }
         return $construct ? new static(...$construct) : new static();
     }
 
     private static function fillNullableFields(BaseModel $model, array $handledFields): void
     {
-        foreach (static::ref()->fields as $field => $smartProp) {
-            if (array_key_exists($field, $handledFields) || !empty($model->$field)) {
+        foreach (static::ref()->fields as $field => $refProp) {
+            if (!empty($model->$field) || array_key_exists($field, $handledFields)) {
                 continue;
             }
 
-            if ($smartProp->isCollection) {
+            if ($refProp->isCollection) {
                 $model->$field = new static::$collectionClasses[0]();
-            } else if ($smartProp->allowsNull && !isset($model->$field)) {
+            } else if ($refProp->allowsNull && !isset($model->$field)) {
                 $model->$field = null;
             }
         }
@@ -131,56 +132,60 @@ abstract class BaseModel implements JsonSerializable {
 
     private function constructToArrayOnly(array &$return, ?array $fieldsArr): void
     {
-        foreach (static::ref()->construct as $propName => $smartProp) {
-            if (!is_null($fieldsArr) && !array_key_exists($propName, $fieldsArr)) {
-                continue;
+        if (is_null($fieldsArr)) {
+            foreach (static::ref()->construct as $propName => $refProp) {
+                $return[$propName] = $this->$propName;
             }
-            $return[$propName] = $this->$propName;
+        } else {
+            foreach (static::ref()->construct as $propName => $refProp) {
+                if (!array_key_exists($propName, $fieldsArr)) {
+                    continue;
+                }
+                $return[$propName] = $this->$propName;
+            }
         }
     }
 
     private function fieldsToArrayOnly(array &$return, array $fieldsArr, ?string $smartName): void
     {
-        foreach ($fieldsArr as $fieldName => $smartField) {
+        foreach ($fieldsArr as $field => $refProp) {
 
-            if (!$smartField) {
-                if ($this->hasAttribute($fieldName)) {
-                    $return[$fieldName] = $this->$fieldName;
+            if (!$refProp) {
+                if ($this->hasAttribute($field)) {
+                    $return[$field] = $this->$field;
                 }
                 continue;
             }
-            /** @var $smartField \ModelsAlpha\Reflection\SmartReflectionProperty */
+            /** @var $refProp \ModelsAlpha\Reflection\ReflectionProperty */
 
-            if ($smartField->preventToArrayOnNull &&
-                (is_null($this->$fieldName ?? null) || ($smartField->isCollection && !$this->$fieldName->count()))
-            ) {
+            if ($refProp->preventToArrayOnNull && $this->fieldIsNull($refProp)) {
                 continue;
             }
 
-            $jsonName = !empty($smartField->hardName) ? $smartField->hardName : $fieldName;
+            $jsonName = !empty($refProp->hardName) ? $refProp->hardName : $field;
 
-            if (!isset($this->$fieldName)) {
-                $return[$jsonName] = $smartField->isCollection ? [] : null;
+            if (!isset($this->$field)) {
+                $return[$jsonName] = $refProp->isCollection ? [] : null;
             }
-            else if ($smartField->isCollection) {
+            else if ($refProp->isCollection) {
                 $return[$jsonName] = [];
-                foreach ($this->$fieldName as $item) {
+                foreach ($this->$field as $item) {
                     /** @var $item \ModelsAlpha\BaseModel */
                     $return[$jsonName][] = $item->toArray($smartName);
                 }
             }
-            else if ($smartField->isCarbon) {
-                $carbon = $this->$fieldName;
+            else if ($refProp->isCarbon) {
+                $carbon = $this->$field;
                 /** @var \Carbon\Carbon $carbon */
                 $return[$jsonName] = $carbon->avoidMutation()
-                    ->setTimezone($smartField->carbonParseTimeZone)
-                    ->format(is_array($smartField->carbonParseFormat) ? $smartField->carbonParseFormat[0] : $smartField->carbonParseFormat);
+                    ->setTimezone($refProp->carbonParseTimeZone)
+                    ->format(is_array($refProp->carbonParseFormat) ? $refProp->carbonParseFormat[0] : $refProp->carbonParseFormat);
             }
-            else if (!empty($smartField->className)) {
-                $return[$jsonName] = $this->$fieldName->toArray($smartName);
+            else if (!empty($refProp->className) && !$refProp->isClassForeign) {
+                $return[$jsonName] = $this->$field->toArray($smartName);
             }
             else {
-                $return[$jsonName] = $this->$fieldName;
+                $return[$jsonName] = $this->$field;
             }
         }
     }
@@ -238,7 +243,6 @@ abstract class BaseModel implements JsonSerializable {
 
     public function __get(string $name)
     {
-        static::prepareRef();
         if ($this->hasAttribute($name)) {
             $method = static::ref()->attributes[$name];
             return $this->$method();
@@ -248,18 +252,25 @@ abstract class BaseModel implements JsonSerializable {
 
     public function __isset(string $name): bool
     {
-        static::prepareRef();
         return $this->hasAttribute($name);
     }
 
-    public function hasAttribute(string $name): bool
+    public final function hasAttribute(string $name): bool
     {
+        static::prepareRef();
         return array_key_exists($name, static::ref()->attributes);
+    }
+
+    /** SPECIFICs */
+
+    protected function fieldIsNull(ReflectionProperty $refProp): bool
+    {
+        return is_null($this->{$refProp->name} ?? null) || ($refProp->isCollection && !$this->{$refProp->name}->count());
     }
 
     /** HELPERs */
 
-    protected static function ref(?string $className = null): SmartReflectionDto
+    protected static function ref(?string $className = null): ReflectionDto
     {
         $className = $className ?? static::class;
         return ReflectionCache::$repo[$className];
@@ -271,7 +282,7 @@ abstract class BaseModel implements JsonSerializable {
         ReflectionCache::prepare($className);
     }
 
-    public static function getRef(string $className): ?SmartReflectionDto
+    public static function getRef(string $className): ?ReflectionDto
     {
         static::prepareRef($className);
         return static::ref($className);

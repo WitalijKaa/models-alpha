@@ -2,7 +2,7 @@
 
 namespace ModelsAlpha\Reflection;
 
-class SmartReflectionDto
+final class ReflectionDto
 {
     public array $construct;
     public array $fields;

@@ -12,7 +12,7 @@ use ModelsAlpha\Attributes\TimeZones\AbstractTimeZone;
 use ModelsAlpha\Attributes\TimeZones\UtcTimeZone;
 use ModelsAlpha\BaseModel;
 
-class SmartReflectionProperty
+class ReflectionProperty
 {
     private const int LOGIC_MISS_SINGLE_PROP = -4;
     private const int LOGIC_MISS_ALL_PROPS = -10000000;
@@ -157,7 +157,7 @@ class SmartReflectionProperty
         foreach ($this->classesOfCollection as $className => $notSubClassOfBaseModel) {
             if (false == $notSubClassOfBaseModel) {
                 $ref = $getRef($className);
-                /** @var $ref \ModelsAlpha\Reflection\SmartReflectionDto */
+                /** @var $ref \ModelsAlpha\Reflection\ReflectionDto */
                 $guess[$className] = $this->countKeysDiff($item, $ref->fields);
             }
         }

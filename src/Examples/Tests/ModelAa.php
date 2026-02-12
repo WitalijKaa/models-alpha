@@ -6,6 +6,8 @@ use ModelsAlpha\BaseModel;
 
 class ModelAa extends BaseModel
 {
+    protected static bool $careOriginalAsAttributes = true;
+
     public function __construct(public string $inConstructPublic = 'NULL', protected ?string $inConstructProtected = null)
     {
     }

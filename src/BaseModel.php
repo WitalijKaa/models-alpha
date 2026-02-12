@@ -35,6 +35,11 @@ abstract class BaseModel implements JsonSerializable {
         return self::makeByArray($json);
     }
 
+    public static final function fromJsonStr(string $json): static
+    {
+        return self::fromArray(json_decode($json, true));
+    }
+
     protected function beforeFill(array &$item): void
     {
     }

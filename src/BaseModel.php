@@ -16,6 +16,12 @@ abstract class BaseModel implements JsonSerializable {
     protected static array $collectionClasses = [Collection::class];
     protected static array $carbonClasses = [Carbon::class];
 
+    protected static bool $careOriginal = true;
+    protected static bool $careOriginalAsAttributes = true;
+    protected array $originalPart = [];
+
+    /** BASIC */
+
     public final function parseArray(array $json): static
     {
         static::prepareRef();
@@ -50,6 +56,7 @@ abstract class BaseModel implements JsonSerializable {
             $field = $ref->hardNames[$field] ?? $field;
 
             if (!$refProp = $ref->fields[$field] ?? null) {
+                static::$careOriginal && static::careOriginalField($field, $value, $model);
                 continue;
             }
             $handledFields[$field] = true;
@@ -102,6 +109,14 @@ abstract class BaseModel implements JsonSerializable {
         return $model;
     }
 
+    private static function careOriginalField(string $field, mixed $value, BaseModel $model): void
+    {
+        if (array_key_exists($field, static::ref()->construct)) {
+            return;
+        }
+        $model->originalPart[$field] = $value;
+    }
+
     private static function makeWithConstructor(array $item): static
     {
         $construct = [];
@@ -126,7 +141,21 @@ abstract class BaseModel implements JsonSerializable {
         }
     }
 
-    public function __clone(): void { static::makeByArray($this->toArray()); }
+    public function __clone(): void { static::makeByArray($this->toApi()); }
+
+    /** to API */
+
+    public function toApi(?string $smartName = null): array
+    {
+        if (empty($this->originalPart) || !static::$careOriginal) {
+            return $this->toArray($smartName);
+        }
+        return array_merge($this->originalPart, $this->toArray($smartName));
+    }
+
+    public function toApiJsonStr(?string $smartName = null): string {
+        return json_encode($this->toApi($smartName), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
 
     /** to ARRAY */
 
@@ -246,19 +275,26 @@ abstract class BaseModel implements JsonSerializable {
         if ($this->hasAttribute($name)) {
             $method = static::ref()->attributes[$name];
             return $this->$method();
+        } else if ($this->hasAttributeOriginal($name)) {
+            return $this->originalPart[$name];
         }
         throw new \ErrorException('Undefined property: ' . static::class . ' ::$' . $name);
     }
 
     public function __isset(string $name): bool
     {
-        return $this->hasAttribute($name);
+        return $this->hasAttribute($name) || $this->hasAttributeOriginal($name);
     }
 
     public final function hasAttribute(string $name): bool
     {
         static::prepareRef();
         return array_key_exists($name, static::ref()->attributes);
+    }
+
+    public final function hasAttributeOriginal(string $name): bool
+    {
+        return static::$careOriginalAsAttributes && array_key_exists($name, $this->originalPart);
     }
 
     /** SPECIFICs */

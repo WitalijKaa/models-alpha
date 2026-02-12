@@ -9,33 +9,38 @@ class ReflectionBuilder
     public static function getReflection(string $class): ReflectionDto
     {
         $R = new \ReflectionClass($class);
-        $dto = new ReflectionDto();
-        static::propertiesReflection($dto, $R);
+        [$construct, $fields, $hardNames] = static::propertiesReflection($R);
         $methods = $R->getMethods();
-        $dto->attributes = static::attributesReflection($methods);
-        $dto->smartArrays = static::smartArraysReflection($methods);
-        return $dto;
+
+        return new ReflectionDto(
+            construct: $construct,
+            fields: $fields,
+            hardNames: $hardNames,
+            attributes: static::attributesReflection($methods),
+            smartArrays: static::smartArraysReflection($methods)
+        );
     }
 
 
-    private static function propertiesReflection(ReflectionDto $dto, \ReflectionClass $R): void
+    private static function propertiesReflection(\ReflectionClass $R): array
     {
-        $dto->construct = [];
-        $dto->fields = [];
-        $dto->hardNames = [];
+        $construct = [];
+        $fields = [];
+        $hardNames = [];
         foreach ($R->getProperties() as $refProperty) {
             if ($refProperty->isPublic() && !$refProperty->isReadOnly() && !$refProperty->isStatic()) {
                 if ($refProperty->isPromoted()) {
-                    $dto->construct[$refProperty->getName()] = new ReflectionProperty($refProperty);
+                    $construct[$refProperty->getName()] = new ReflectionProperty($refProperty);
                 }
                 else {
-                    $refProp = $dto->fields[$refProperty->getName()] = new ReflectionProperty($refProperty);
+                    $refProp = $fields[$refProperty->getName()] = new ReflectionProperty($refProperty);
                 }
             }
             if (!empty($refProp) && $refProp->hardName) {
-                $dto->hardNames[$refProp->hardName] = $refProp->name;
+                $hardNames[$refProp->hardName] = $refProp->name;
             }
         }
+        return [$construct, $fields, $hardNames];
     }
 
     private static function attributesReflection(array $refMethods): array

@@ -20,6 +20,6 @@ class ModelBa extends BaseModel
 
     public function getProtectedProp(): int
     {
-        return $this->invisibleInt;
+        return $this->invisibleInt + $this->kindOfAttributeInt;
     }
 }

@@ -2,7 +2,8 @@
 
 namespace ModelsAlpha\Examples\Tests;
 
-class ModelBb extends ModelBa
+class ModelCc extends ModelCa
 {
+    protected static bool $careOriginal = false;
     protected static bool $careOriginalAsAttributes = true;
 }

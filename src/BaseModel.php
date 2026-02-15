@@ -17,7 +17,7 @@ abstract class BaseModel implements JsonSerializable {
     protected static array $carbonClasses = [Carbon::class];
 
     protected static bool $careOriginal = true;
-    protected static bool $careOriginalAsAttributes = true;
+    protected static bool $careOriginalAsAttributes = false;
     protected array $originalPart = [];
 
     /** BASIC */

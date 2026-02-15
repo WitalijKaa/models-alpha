@@ -21,20 +21,26 @@ final class ModelConstructorTest extends TestCase
     {
         $model = ModelAa::fromJsonStr(self::MODEL_A);
         $this->assertSame('Light', $model->inConstructPublic);
-        $this->assertSame('Dark', $model->inConstructProtected);
-        $this->assertNull($model->getProtectedProp());
-        $this->assertJsonStringEqualsJsonString(self::MODEL_A, $model->toApiJsonStr());
-    }
-
-    public function testConstructNoCareAttrs(): void
-    {
-        $model = ModelAb::fromJsonStr(self::MODEL_A);
-        $this->assertSame('Light', $model->inConstructPublic);
         $this->assertNull($model->getProtectedProp());
         $this->assertJsonStringEqualsJsonString(self::MODEL_A, $model->toApiJsonStr());
 
         $this->expectException(\ErrorException::class);
         $model->inConstructProtected;
+    }
+
+    public function testConstructOriginalAsAttr(): void
+    {
+        $model = ModelAb::fromJsonStr(self::MODEL_A);
+        $this->assertSame('Light', $model->inConstructPublic);
+        $this->assertSame('Dark', $model->inConstructProtected);
+        $this->assertNull($model->getProtectedProp());
+        $this->assertJsonStringEqualsJsonString(self::MODEL_A, $model->toApiJsonStr());
+
+        $model = ModelAb::fromJsonStr(self::MODEL_A2);
+        $this->assertSame('Light', $model->inConstructPublic);
+        $this->assertSame('Dark', $model->otherField);
+        $this->assertNull($model->getProtectedProp());
+        $this->assertJsonStringEqualsJsonString(self::MODEL_A2, $model->toApiJsonStr());
     }
 
     public function testConstructNoCare(): void
@@ -47,23 +53,28 @@ final class ModelConstructorTest extends TestCase
         $this->expectException(\ErrorException::class);
         $model->inConstructProtected;
     }
-
+//
     public function testConstructTwo(): void
     {
         $model = ModelAa::fromJsonStr(self::MODEL_A2);
         $this->assertSame('Light', $model->inConstructPublic);
-        $this->assertSame('Dark', $model->otherField);
         $this->assertNull($model->getProtectedProp());
         $this->assertJsonStringEqualsJsonString(self::MODEL_A2, $model->toApiJsonStr());
+
+        $this->expectException(\ErrorException::class);
+        $model->otherField;
     }
 
     public function testConstructThree(): void
     {
         $model = ModelAa::fromJsonStr(self::MODEL_A3);
         $this->assertSame('NULL', $model->inConstructPublic);
-        $this->assertSame('Dark', $model->inConstructProtected);
         $this->assertNull($model->getProtectedProp());
         $this->assertJsonStringEqualsJsonString(self::MODEL_A3_RETURN, $model->toApiJsonStr());
+
+
+        $this->expectException(\ErrorException::class);
+        $model->inConstructProtected;
     }
 
     public function testConstructCreateMethods(): void

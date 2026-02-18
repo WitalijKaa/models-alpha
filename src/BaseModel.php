@@ -118,7 +118,7 @@ abstract class BaseModel implements JsonSerializable {
                 $refProp->makeCarbon($value, $field, $model);
             }
             else if ($class && is_array($value)) {
-                $model->$field = $refProp->isClassForeign ? new $class(...$value) : $class::byArr($value);
+                $model->$field = $refProp->isClassForeign ? new $class(...$value) : $class::fromArray($value);
             }
             else {
                 $model->$field = $value;

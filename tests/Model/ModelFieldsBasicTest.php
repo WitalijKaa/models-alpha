@@ -33,7 +33,7 @@ final class ModelFieldsBasicTest extends TestCase
     private const string MODEL_C3 = '{"someStr":"aNote","someJustStr":123}';
     private const string MODEL_C3_CHECK = '{"someStr":"aNote","someJustStr":123,"someStrMayBeNull":null}';
 
-    private const string MODEL_P = '{"someInt":"404","someStr":500,"someFloat":12.34567,"someBool":false}';
+    private const string MODEL_P = '{"someInt":"404","someStr":500,"someFloat":12.34567,"someBool":0}';
     private const string MODEL_P_CHECK = '{"someInt":404,"someStr":"500","someFloat":12.34567,"someBool":false}';
 
     public function testInt(): void

@@ -69,6 +69,7 @@ abstract class BaseModel implements JsonSerializable {
                 static::$careOriginal && static::careOriginalField($field, $value, $model);
                 continue;
             }
+            /** @var ReflectionProperty $refProp */
             $handledFields[$field] = true;
 
             if (is_null($value)) {
@@ -88,17 +89,28 @@ abstract class BaseModel implements JsonSerializable {
             $class = $refProp->getCastClass();
             /** @var string|BaseModel|mixed $class */
 
-            if ($refProp->isCollection && is_array($value)) {
+            if ($refProp->isCollection && is_array($value))
+            {
+                $addToCollection = function (BaseModel $model, string $field, array $item, string $itemClass, ReflectionProperty $refProp) {
+                    /** @var string|BaseModel|mixed $itemClass */
+                    try {
+                        $model->$field->add($refProp->isClassOfCollectionSubClassOfBaseModel($itemClass) ? $itemClass::fromArray($item) : new $itemClass(...$item));
+                    } catch (\Throwable $ex) {
+                        if (!$refProp->isClassOfCollectionSubClassOfBaseModel($itemClass)) {
+                            throw new \Error('Cant create array item with DTO ' . $itemClass . ' The json of item ' . json_encode($item) . ' The err msg is ' . $ex->getMessage(), 500);
+                        }
+                        else { throw $ex; }
+                    }
+                };
+
                 if ($onlyOneItemClass = $refProp->findOnlyOneClassOfCollection()) {
-                    /** @var string|BaseModel|mixed $onlyOneItemClass */
                     foreach ($value as $subItem) {
-                        $model->$field->add($refProp->isClassOfCollectionSubClassOfBaseModel($onlyOneItemClass) ? $onlyOneItemClass::fromArray($subItem) : new $onlyOneItemClass(...$value));
+                        $addToCollection($model, $field, $subItem, $onlyOneItemClass, $refProp);
                     }
                 } else {
                     foreach ($value as $subItem) {
                         $itemClass = $refProp->guessClassOfCollection($subItem, [static::class, 'getRef']);
-                        /** @var string|BaseModel|mixed $itemClass */
-                        $model->$field->add($refProp->isClassOfCollectionSubClassOfBaseModel($itemClass) ? $itemClass::fromArray($subItem) : new $itemClass(...$value));
+                        $addToCollection($model, $field, $subItem, $itemClass, $refProp);
                     }
                 }
             }
@@ -158,9 +170,9 @@ abstract class BaseModel implements JsonSerializable {
     public function toApi(?string $smartName = null): array
     {
         if (empty($this->originalPart) || !static::$careOriginal) {
-            return $this->toArray($smartName);
+            return $this->toArrayTech($smartName, true);
         }
-        return array_merge($this->originalPart, $this->toArray($smartName));
+        return array_merge($this->originalPart, $this->toArrayTech($smartName, true));
     }
 
     public function toApiJsonStr(?string $smartName = null): string {
@@ -185,7 +197,7 @@ abstract class BaseModel implements JsonSerializable {
         }
     }
 
-    private function fieldsToArrayOnly(array &$return, array $fieldsArr, ?string $smartName): void
+    private function fieldsToArrayOnly(array &$return, array $fieldsArr, ?string $smartName, bool $apiMode): void
     {
         foreach ($fieldsArr as $field => $refProp) {
 
@@ -210,7 +222,7 @@ abstract class BaseModel implements JsonSerializable {
                 $return[$jsonName] = [];
                 foreach ($this->$field as $item) {
                     /** @var $item \ModelsAlpha\BaseModel */
-                    $return[$jsonName][] = $item->toArray($smartName);
+                    $return[$jsonName][] = $apiMode && $item instanceof self ? $item->toApi($smartName) : $item->toArray($smartName);
                 }
             }
             else if ($refProp->isCarbon) {
@@ -221,7 +233,7 @@ abstract class BaseModel implements JsonSerializable {
                     ->format(is_array($refProp->carbonParseFormat) ? $refProp->carbonParseFormat[0] : $refProp->carbonParseFormat);
             }
             else if (!empty($refProp->className) && !$refProp->isClassForeign) {
-                $return[$jsonName] = $this->$field->toArray($smartName);
+                $return[$jsonName] = $apiMode ? $this->$field->toApi($smartName) : $this->$field->toArray($smartName);
             }
             else {
                 $return[$jsonName] = $this->$field;
@@ -229,7 +241,7 @@ abstract class BaseModel implements JsonSerializable {
         }
     }
 
-    public final function toArray(?string $smartName = null): array
+    private function toArrayTech(?string $smartName, bool $apiMode): array
     {
         static::prepareRef();
         $ref = static::ref();
@@ -251,9 +263,14 @@ abstract class BaseModel implements JsonSerializable {
             $fieldsArr = $ref->fields;
         }
 
-        $this->fieldsToArrayOnly($return, $fieldsArr, $smartName);
+        $this->fieldsToArrayOnly($return, $fieldsArr, $smartName, $apiMode);
 
         return $return;
+    }
+
+    public final function toArray(?string $smartName = null): array
+    {
+        return $this->toArrayTech($smartName, false);
     }
 
     public final function only(array $only, ?string $smartName = null): array
@@ -268,7 +285,7 @@ abstract class BaseModel implements JsonSerializable {
         }
 
         $this->constructToArrayOnly($return, $only);
-        $this->fieldsToArrayOnly($return, $only, $smartName);
+        $this->fieldsToArrayOnly($return, $only, $smartName, false);
         return $return;
     }
 

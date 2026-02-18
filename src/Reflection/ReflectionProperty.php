@@ -67,7 +67,11 @@ class ReflectionProperty
 
                 $this->isCollection = true;
                 foreach ($refAttrs as $refAttr) {
-                    $this->classesOfCollection[$refAttr->getName()] = !is_subclass_of($refAttr->getName(), BaseModel::class);
+                    $isForeignClass = !is_subclass_of($refAttr->getName(), BaseModel::class);
+                    if ($isForeignClass && !(new \ReflectionClass($refAttr->getName()))->hasMethod('toArray')) {
+                        continue;
+                    }
+                    $this->classesOfCollection[$refAttr->getName()] = $isForeignClass;
                 }
             }
             else if ($modelClass::isClassCarbon($refType->getName()) && $refAttrs) {
@@ -154,14 +158,22 @@ class ReflectionProperty
             throw new \Exception('guessClassOfCollection Exception');
         }
         $guess = [];
+        $onlyOneForeignClass = null;
         foreach ($this->classesOfCollection as $className => $notSubClassOfBaseModel) {
             if (false == $notSubClassOfBaseModel) {
                 $ref = $getRef($className);
                 /** @var $ref \ModelsAlpha\Reflection\ReflectionDto */
                 $guess[$className] = $this->countKeysDiff($item, $ref->fields);
             }
+            else {
+                if (is_null($onlyOneForeignClass)) {
+                    $onlyOneForeignClass = $className;
+                } else {
+                    $onlyOneForeignClass = false;
+                }
+            }
         }
-        return $this->findMaxClass($guess);
+        return $this->findMaxClass($guess, $onlyOneForeignClass);
     }
 
     private function countKeysDiff(array $item, array $fields): int
@@ -181,15 +193,22 @@ class ReflectionProperty
         return $count['result'];
     }
 
-    private function findMaxClass(array $guess): string
+    private function findMaxClass(array $guess, null|string|false $onlyOneForeignClass): string
     {
         $maxClass = null;
         $maxRate = PHP_INT_MIN;
+        $hasAtLeastOneField = false;
         foreach ($guess as $class => $rate) {
             if ($rate > $maxRate) {
                 $maxRate = $rate;
                 $maxClass = $class;
             }
+            if ($rate > self::LOGIC_MISS_ALL_PROPS) {
+                $hasAtLeastOneField = true;
+            }
+        }
+        if (!$hasAtLeastOneField && $onlyOneForeignClass) {
+            return $onlyOneForeignClass;
         }
         return $maxClass;
     }

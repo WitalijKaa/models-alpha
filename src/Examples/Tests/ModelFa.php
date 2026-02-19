@@ -4,10 +4,12 @@ namespace ModelsAlpha\Examples\Tests;
 
 use Carbon\Carbon;
 use ModelsAlpha\Attributes\HardName;
+use ModelsAlpha\Attributes\PreventToArrayOnNull;
 use ModelsAlpha\Attributes\TimeFormats\YmdHisMultiTimeFormat;
 use ModelsAlpha\Attributes\TimeFormats\YmdHisTimeFormat;
 use ModelsAlpha\Attributes\TimeFormats\YmdTHisPTimeFormat;
 use ModelsAlpha\Attributes\TimeFormats\YmdTimeFormat;
+use ModelsAlpha\Attributes\TimeZones\AutoTimeZone;
 use ModelsAlpha\Attributes\TimeZones\CaliforniaTimeZone;
 use ModelsAlpha\BaseModel;
 
@@ -28,4 +30,7 @@ class ModelFa extends BaseModel
 
     #[YmdTHisPTimeFormat, CaliforniaTimeZone]
     public Carbon $ymdthis;
+
+    #[YmdTHisPTimeFormat, PreventToArrayOnNull, AutoTimeZone]
+    public Carbon $sameTime;
 }

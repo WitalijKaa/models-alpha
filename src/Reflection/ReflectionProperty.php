@@ -9,6 +9,7 @@ use ModelsAlpha\Attributes\PreventToArrayOnNull;
 use ModelsAlpha\Attributes\TimeFormats\AbstractTimeFormat;
 use ModelsAlpha\Attributes\TimeFormats\YmdTimeFormat;
 use ModelsAlpha\Attributes\TimeZones\AbstractTimeZone;
+use ModelsAlpha\Attributes\TimeZones\AutoTimeZone;
 use ModelsAlpha\Attributes\TimeZones\UtcTimeZone;
 use ModelsAlpha\BaseModel;
 
@@ -225,7 +226,11 @@ class ReflectionProperty
         foreach ($carbonFormats as $ix => $carbonFormat) {
             $isLastVariant = count($carbonFormats) == $ix + 1;
             try {
-                $model->$field = Carbon::createFromFormat($carbonFormat, $value, $this->carbonParseTimeZone);
+                if (AutoTimeZone::invoke() == $this->carbonParseTimeZone) {
+                    $model->$field = Carbon::createFromFormat($carbonFormat, $value);
+                } else {
+                    $model->$field = Carbon::createFromFormat($carbonFormat, $value, $this->carbonParseTimeZone);
+                }
                 break;
             } catch (InvalidFormatException $ex) {
                 if ($isLastVariant) {

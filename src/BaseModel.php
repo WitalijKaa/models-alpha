@@ -4,6 +4,7 @@ namespace ModelsAlpha;
 
 use Carbon\Carbon;
 use JsonSerializable;
+use ModelsAlpha\Attributes\TimeZones\AutoTimeZone;
 use ModelsAlpha\Helpers\Collection;
 use ModelsAlpha\Reflection\ReflectionCache;
 use ModelsAlpha\Reflection\ReflectionDto;
@@ -228,9 +229,13 @@ abstract class BaseModel implements JsonSerializable {
             else if ($refProp->isCarbon) {
                 $carbon = $this->$field;
                 /** @var \Carbon\Carbon $carbon */
-                $return[$jsonName] = $carbon->avoidMutation()
-                    ->setTimezone($refProp->carbonParseTimeZone)
-                    ->format(is_array($refProp->carbonParseFormat) ? $refProp->carbonParseFormat[0] : $refProp->carbonParseFormat);
+                if (AutoTimeZone::invoke() == $refProp->carbonParseTimeZone) {
+                    $return[$jsonName] = $carbon->format(is_array($refProp->carbonParseFormat) ? $refProp->carbonParseFormat[0] : $refProp->carbonParseFormat);
+                } else {
+                    $return[$jsonName] = $carbon->avoidMutation()
+                        ->setTimezone($refProp->carbonParseTimeZone)
+                        ->format(is_array($refProp->carbonParseFormat) ? $refProp->carbonParseFormat[0] : $refProp->carbonParseFormat);
+                }
             }
             else if (!empty($refProp->className) && !$refProp->isClassForeign) {
                 $return[$jsonName] = $apiMode ? $this->$field->toApi($smartName) : $this->$field->toArray($smartName);

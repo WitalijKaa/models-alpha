@@ -15,7 +15,10 @@ final class ModelFieldsTimeTest extends TestCase
     private const string MODEL_F = '{"ymd":"2010-11-21","y.m.d..":"2010-11-22","ymdhis":"2010-11-23 23:24:25","ymdhisMu":"2010-11-24 23:24:25","ymdhisMult":"2010-11-25","ymdthis":"2010-11-26T02:24:25+04:00"}';
     private const string MODEL_F_CHECK = '{"ymd":"2010-11-21","y.m.d..":"2010-11-22","ymdhis":"2010-11-23 23:24:25","ymdhisMu":"2010-11-24 23:24:25","ymdhisMult":"2010-11-25 00:00:00","ymdthis":"2010-11-25T14:24:25-08:00"}';
 
-    public function testYmd(): void
+    private const string MODEL_F2 = '{"sameTime":"2010-11-26T03:24:25+04:00","ymd":null,"y.m.d..":null}';
+    private const string MODEL_F2_CHECK = '{"sameTime":"2010-11-26T03:24:25+04:00","ymd":null,"y.m.d..":null,"ymdhis":null,"ymdhisMu":null,"ymdhisMult":null,"ymdthis":null}';
+
+    public function testFormats(): void
     {
 
         $model = ModelFa::fromJsonStr(self::MODEL_F);
@@ -84,5 +87,39 @@ final class ModelFieldsTimeTest extends TestCase
         $this->assertSame(25, $model->ymdthis->second);
 
         $this->assertJsonStringEqualsJsonString(self::MODEL_F_CHECK, $model->toApiJsonStr());
+    }
+
+    public function testSameTz(): void
+    {
+
+        $model = ModelFa::fromJsonStr(self::MODEL_F2);
+
+        $this->assertInstanceOf(Carbon::class, $model->sameTime);
+        $this->assertSame(2010, $model->sameTime->year);
+        $this->assertSame(11, $model->sameTime->month);
+        $this->assertSame(26, $model->sameTime->day);
+        $this->assertSame(3, $model->sameTime->hour);
+        $this->assertSame(24, $model->sameTime->minute);
+        $this->assertSame(25, $model->sameTime->second);
+
+        $carbonTz = $model->sameTime->avoidMutation()->setTimezone(CaliforniaTimeZone::invoke());
+        $this->assertSame(2010, $carbonTz->year);
+        $this->assertSame(11, $carbonTz->month);
+        $this->assertSame(25, $carbonTz->day);
+        $this->assertSame(15, $carbonTz->hour);
+        $this->assertSame(24, $carbonTz->minute);
+        $this->assertSame(25, $carbonTz->second);
+
+        $this->assertJsonStringEqualsJsonString(self::MODEL_F2_CHECK, $model->toApiJsonStr());
+
+        $model->sameTime->setTimezone(CaliforniaTimeZone::invoke());
+        $this->assertSame(2010, $model->sameTime->year);
+        $this->assertSame(11, $model->sameTime->month);
+        $this->assertSame(25, $model->sameTime->day);
+        $this->assertSame(15, $model->sameTime->hour);
+        $this->assertSame(24, $model->sameTime->minute);
+        $this->assertSame(25, $model->sameTime->second);
+
+        $this->assertJsonStringNotEqualsJsonString(self::MODEL_F2_CHECK, $model->toApiJsonStr());
     }
 }

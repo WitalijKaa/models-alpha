@@ -4,6 +4,35 @@ namespace ModelsAlpha\Helpers;
 
 class Str
 {
+    public static function aClass(mixed $class): string
+    {
+        if (!is_string($class)) {
+            if (is_object($class)) {
+                $class = $class::class;
+            }
+            else if (is_array($class)) {
+                return 'Array';
+            }
+            else if (is_callable($class)) {
+                return 'Callable';
+            }
+            else {
+                $class = (string)$class;
+            }
+        }
+        if (!$class) {
+            return 'NoClass';
+        }
+
+        $pos = strrpos($class, '\\');
+
+        if (!$pos) {
+            return $class;
+        }
+
+        return substr($class, 1 + $pos);
+    }
+
     public static function camel($value)
     {
         return lcfirst(static::studly($value));

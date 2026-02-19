@@ -3,7 +3,7 @@
 namespace ModelsAlpha\Attributes\TimeFormats;
 
 #[\Attribute]
-class ExampleMultiTimeFormat extends AbstractTimeFormat
+class YmdHisMultiTimeFormat extends AbstractTimeFormat
 {
     public static function invoke(): string|array
     {

@@ -27,7 +27,7 @@ abstract class BaseApiModel extends BaseModel
     protected const string LOG_ERROR = 'ERROR';
     protected const string LOG_CRITICAL = 'CRITICAL';
 
-    protected string $method = self::M_GET;
+    private string $method = self::M_GET;
     protected float $timeoutDefault = 42.0;
 
     private int $lastResponseCode;
@@ -92,6 +92,11 @@ abstract class BaseApiModel extends BaseModel
         return !empty($this->lastResponseCode) && $this->lastResponseCode >= 200 && $this->lastResponseCode < 300;
     }
 
+    public final function errorCode(): int
+    {
+        return $this->lastResponseCode ?? 700;
+    }
+
     public final function errorMsg(): string
     {
         return $this->lastErrorMessage ?? '';
@@ -99,10 +104,44 @@ abstract class BaseApiModel extends BaseModel
 
     /** REQUEST send */
 
+    public static final function apiGet(): static
+    {
+        $model = new static();
+        $response = $model->sendGet();
+        if (is_null($response)) {
+            throw new \HttpException($model->errorMsg(), $model->errorCode());
+        }
+        return static::fromArray($response);
+    }
+
+    public static final function justGet(): ?static
+    {
+        $model = new static();
+        $response = $model->sendGet();
+        return is_null($response) ? null : static::fromArray($response);
+    }
+
     public final function sendGet(): ?array
     {
         $this->method = self::M_GET;
         return $this->getResponse();
+    }
+
+    public static final function apiPost(array $body): static
+    {
+        $model = new static();
+        $response = $model->sendPost($body);
+        if (is_null($response)) {
+            throw new \HttpException($model->errorMsg(), $model->errorCode());
+        }
+        return static::fromArray($response);
+    }
+
+    public static final function justPost(array $body): ?static
+    {
+        $model = new static();
+        $response = $model->sendPost($body);
+        return is_null($response) ? null : static::fromArray($response);
     }
 
     public final function sendPost(array $body): ?array
@@ -111,10 +150,27 @@ abstract class BaseApiModel extends BaseModel
         return $this->getResponse($this->curlOptions($body));
     }
 
-    public final function sendPostVsCode(array $body): bool
+    public final function successPost(array $body): bool
     {
         $this->sendPost($body);
         return $this->isLastResponseSuccess();
+    }
+
+    public static final function apiPut(array $body): static
+    {
+        $model = new static();
+        $response = $model->sendPut($body);
+        if (is_null($response)) {
+            throw new \HttpException($model->errorMsg(), $model->errorCode());
+        }
+        return static::fromArray($response);
+    }
+
+    public static final function justPut(array $body): ?static
+    {
+        $model = new static();
+        $response = $model->sendPut($body);
+        return is_null($response) ? null : static::fromArray($response);
     }
 
     public final function sendPut(array $body): ?array
@@ -123,10 +179,27 @@ abstract class BaseApiModel extends BaseModel
         return $this->getResponse($this->curlOptions($body));
     }
 
-    public final function sendPutVsCode(array $body): bool
+    public final function successPut(array $body): bool
     {
         $this->sendPut($body);
         return $this->isLastResponseSuccess();
+    }
+
+    public static final function apiPatch(array $body): static
+    {
+        $model = new static();
+        $response = $model->sendPatch($body);
+        if (is_null($response)) {
+            throw new \HttpException($model->errorMsg(), $model->errorCode());
+        }
+        return static::fromArray($response);
+    }
+
+    public static final function justPatch(array $body): ?static
+    {
+        $model = new static();
+        $response = $model->sendPatch($body);
+        return is_null($response) ? null : static::fromArray($response);
     }
 
     public final function sendPatch(array $body): ?array
@@ -135,7 +208,7 @@ abstract class BaseApiModel extends BaseModel
         return $this->getResponse($this->curlOptions($body));
     }
 
-    public final function sendPatchVsCode(array $body): bool
+    public final function successPatch(array $body): bool
     {
         $this->sendPatch($body);
         return $this->isLastResponseSuccess();
@@ -147,7 +220,8 @@ abstract class BaseApiModel extends BaseModel
 
     protected final function getResponse(?CurlOptionsDto $opts = null): ?array
     {
-        if (is_null($responseStr = $this->sendRequestTakeResponse($opts))) {
+        $responseStr = $this->sendRequestTakeResponse($opts ?? $this->curlOptions());
+        if (is_null($responseStr)) {
             return null;
         }
 
@@ -163,10 +237,10 @@ abstract class BaseApiModel extends BaseModel
             return json_decode($responseStr, true, 512, JSON_THROW_ON_ERROR);
         }
         catch (\JsonException) {
-            $this->logAnError(self::LOG_ERROR, static::LOG_PREFIX_JSON . ' ' . Str::aClass($this) . ' ' . $this->apiServer() . $this->apiEndPointForLog(),  ['response' => $responseStr, 'code' => $this->lastResponseCode]);
+            $this->logAnError(self::LOG_ERROR, static::LOG_PREFIX_JSON . ' ' . Str::aClass($this) . ' ' . $this->apiServer() . $this->apiEndPointForLog(),  ['response' => $responseStr, 'code' => $this->errorCode()]);
         }
         catch (\Throwable $ex) {
-            $this->logAnError(self::LOG_CRITICAL, static::LOG_PREFIX_JSON . ' ' . Str::aClass($this) . ' ' . $this->apiServer() . $this->apiEndPointForLog(),  ['ex' => ExceptionLog::toArray($ex), 'response' => $responseStr, 'code' => $this->lastResponseCode]);
+            $this->logAnError(self::LOG_CRITICAL, static::LOG_PREFIX_JSON . ' ' . Str::aClass($this) . ' ' . $this->apiServer() . $this->apiEndPointForLog(),  ['ex' => ExceptionLog::toArray($ex), 'response' => $responseStr, 'code' => $this->errorCode()]);
         }
         return null;
     }
@@ -191,8 +265,6 @@ abstract class BaseApiModel extends BaseModel
 
         $curlErrNo = curl_errno($curl);
         $this->lastErrorMessage = $curlErrMsg = curl_error($curl);
-
-        curl_close($curl);
 
         if ($httpCode >= 200 && $httpCode < 300 && !$curlErrNo) {
             $this->timeoutOnce = null;

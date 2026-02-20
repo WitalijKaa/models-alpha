@@ -33,6 +33,9 @@ final class ModelFieldsBasicTest extends TestCase
     private const string MODEL_C3 = '{"someStr":"aNote","someJustStr":123}';
     private const string MODEL_C3_CHECK = '{"someStr":"aNote","someJustStr":123,"someStrMayBeNull":null}';
 
+    private const string MODEL_C4 = '{}';
+    private const string MODEL_C4_CHECK = '{"someStr":null,"someStrMayBeNull":null,"some.stringo.renamed":null}';
+
     private const string MODEL_P = '{"someInt":"404","someStr":500,"someFloat":12.34567,"someBool":0}';
     private const string MODEL_P_CHECK = '{"someInt":404,"someStr":"500","someFloat":12.34567,"someBool":false}';
 
@@ -126,6 +129,15 @@ final class ModelFieldsBasicTest extends TestCase
 
         $this->expectException(\ErrorException::class);
         $model->kindOfAttributeStr;
+    }
+
+    public function testNothing(): void
+    {
+        $model = ModelCa::fromJsonStr(self::MODEL_C4);
+        $this->assertJsonStringEqualsJsonString(self::MODEL_C4_CHECK, $model->toApiJsonStr());
+
+        $this->expectException(\Error::class);
+        $model->someStr;
     }
 
     public function testStringHardOrHidden(): void

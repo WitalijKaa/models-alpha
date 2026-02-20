@@ -19,32 +19,53 @@ abstract class BaseApiModel extends BaseModel
     protected const string M_GET = 'GET';
     protected const string M_POST = 'POST';
     protected const string M_PUT = 'PUT';
-    protected const string M_DELETE = 'DELETE';
     protected const string M_PATCH = 'PATCH';
+    protected const string M_DELETE = 'DELETE';
     protected const string M_OPTIONS = 'OPTIONS';
     protected const string M_HEAD = 'HEAD';
 
-    protected const string LOG_ERR = 'ERROR';
-    protected const string LOG_CRITIC = 'CRITICAL';
+    protected const string LOG_ERROR = 'ERROR';
+    protected const string LOG_CRITICAL = 'CRITICAL';
 
     protected string $method = self::M_GET;
+    protected float $timeoutDefault = 42.0;
 
     private int $lastResponseCode;
     private string $lastErrorMessage;
 
+    /** MAIN settings */
+
     abstract public function apiServer(): string;
     abstract public function apiEndPoint(): string;
     abstract public function forcedQuery(): array;
+    abstract protected function logAnError(string $level, string $message, array $logArr): void;
 
-    protected function apiEndPointLogMsg(): string {
+    /** SECONDARY settings */
+
+    public function apiHeaders(): array { return []; }
+    public function apiBearer(): ?string { return null; }
+    public function apiBasic(): ?string { return null; }
+
+    protected function requestFormatMode(): string
+    {
+        return self::CONTENT_TYPE_JSON;
+    }
+
+    protected function responseFormatMode(): string
+    {
+        return self::CONTENT_TYPE_JSON;
+    }
+
+    /** LOG settings */
+
+    protected function apiEndPointForLog(): string {
         return $this->apiEndPoint();
     }
 
-    protected bool $isQuiteModeOnceForGetNotFoundApiError = false;
+    /** REQUEST ONCE settings */
 
-    private float $timeoutDefault = 42.0;
     private ?float $timeoutOnce = null;
-    protected function withTimeout(float $timeout): static
+    protected final function withTimeout(float $timeout): static
     {
         $this->timeoutOnce = $timeout > 0.0 ? $timeout : null;
         return $this;
@@ -52,7 +73,7 @@ abstract class BaseApiModel extends BaseModel
 
     private ?int $retriesOnceCount = null;
     private ?int $retriesOnceAwaitSecs = null;
-    protected function withRetries(int $count, int $await = 2): static
+    protected final function withRetries(int $count, int $await = 2): static
     {
         if ($count <= 0 || $await <= 0.0) {
             $this->retriesOnceCount     = null;
@@ -64,198 +85,147 @@ abstract class BaseApiModel extends BaseModel
         return $this;
     }
 
-    protected function logAnError(string $level, string $message, array $logArr): void
-    {
-        // LogHelper::userError($message, $logArr, $this->crmID);
-    }
+    /** RESPONSE status */
 
-    public function isLastResponseSuccess(): bool
+    public final function isLastResponseSuccess(): bool
     {
         return !empty($this->lastResponseCode) && $this->lastResponseCode >= 200 && $this->lastResponseCode < 300;
     }
 
-    public function errorMsg(): string
+    public final function errorMsg(): string
     {
-        return !empty($this->lastErrorMessage) ? $this->lastErrorMessage : '';
+        return $this->lastErrorMessage ?? '';
     }
 
-    public function sendGet(): ?array
+    /** REQUEST send */
+
+    public final function sendGet(): ?array
     {
         $this->method = self::M_GET;
-        $return = $this->getResponse();
-        $this->isQuiteModeOnceForGetNotFoundApiError = false;
-        return $return;
+        return $this->getResponse();
     }
 
-    public function allowGetNotFountQuietOnce(): static
-    {
-        $this->isQuiteModeOnceForGetNotFoundApiError = true;
-        return $this;
-    }
-
-    public function sendPost(array $body): ?array
+    public final function sendPost(array $body): ?array
     {
         $this->method = self::M_POST;
         return $this->getResponse($this->curlOptions($body));
     }
 
-    public function sendPostVsCode(array $body): bool
+    public final function sendPostVsCode(array $body): bool
     {
         $this->sendPost($body);
         return $this->isLastResponseSuccess();
     }
 
-    public function sendPut(array $body): ?array
+    public final function sendPut(array $body): ?array
     {
         $this->method = self::M_PUT;
         return $this->getResponse($this->curlOptions($body));
     }
 
-    public function sendPatch(array $body): ?array
+    public final function sendPutVsCode(array $body): bool
+    {
+        $this->sendPut($body);
+        return $this->isLastResponseSuccess();
+    }
+
+    public final function sendPatch(array $body): ?array
     {
         $this->method = self::M_PATCH;
         return $this->getResponse($this->curlOptions($body));
     }
 
-    public function sendPatchVsCode(array $body): bool
+    public final function sendPatchVsCode(array $body): bool
     {
         $this->sendPatch($body);
         return $this->isLastResponseSuccess();
     }
 
-    protected function getResponse(?CurlOptionsDto $guzzleOptions = null): ?array
-    {
-        $responseStr = $this->getResponseString($guzzleOptions);
+    /** REQUEST send TECH */
 
-        if (is_null($responseStr)) {
+    public function apiUri(): string { return $this->apiServer() . $this->apiEndPoint(); }
+
+    protected final function getResponse(?CurlOptionsDto $opts = null): ?array
+    {
+        if (is_null($responseStr = $this->sendRequestTakeResponse($opts))) {
             return null;
         }
 
-        try {
-            $response = null;
-            if (self::CONTENT_TYPE_JSON == $this->responseFormatMode()) {
-                $response = json_decode($responseStr, true, 512, JSON_THROW_ON_ERROR);
-            }
+        return match ($this->responseFormatMode()) {
+            self::CONTENT_TYPE_JSON => $this->parseResponseStringJson($responseStr),
+            default => null,
+        };
+    }
 
-            return $response;
+    private function parseResponseStringJson(string $responseStr): ?array
+    {
+        try {
+            return json_decode($responseStr, true, 512, JSON_THROW_ON_ERROR);
         }
         catch (\JsonException) {
-            $this->logAnError(self::LOG_ERR, 'Bad JSON in ' . Str::aClass($this),  ['response' => $responseStr, 'endpoint' => $this->apiEndPoint()]);
+            $this->logAnError(self::LOG_ERROR, static::LOG_PREFIX_JSON . ' ' . Str::aClass($this) . ' ' . $this->apiServer() . $this->apiEndPointForLog(),  ['response' => $responseStr, 'code' => $this->lastResponseCode]);
         }
         catch (\Throwable $ex) {
-            $this->logAnError(self::LOG_CRITIC, 'BaseApiModel parse-json ' . Str::aClass($this),  ['ex' => ExceptionLog::toArray($ex)]);
+            $this->logAnError(self::LOG_CRITICAL, static::LOG_PREFIX_JSON . ' ' . Str::aClass($this) . ' ' . $this->apiServer() . $this->apiEndPointForLog(),  ['ex' => ExceptionLog::toArray($ex), 'response' => $responseStr, 'code' => $this->lastResponseCode]);
         }
         return null;
     }
 
-    private function getResponseString(CurlOptionsDto $opts): ?string
+    private function sendRequestTakeResponse(CurlOptionsDto $opts): ?string
     {
-        try {
-            $url = $this->apiUri();
-            $url .= $opts->query ? (str_contains($url, '?') ? '&' : '?') . $opts->query : '';
+        $url = $this->apiUri();
+        $url .= $opts->query ? (str_contains($url, '?') ? '&' : '?') . $opts->query : '';
 
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                    CURLOPT_URL => $url,
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_HTTPHEADER => $opts->headers,
-                    CURLOPT_CUSTOMREQUEST => $this->method,
-                ] + ($opts->timeout > 0.01 ? [CURLOPT_TIMEOUT_MS => (int)(1000.0 * $opts->timeout)] : [])
-                + ($opts->body ? [CURLOPT_POSTFIELDS => $opts->body] : [])
-            );
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => $opts->headers,
+                CURLOPT_CUSTOMREQUEST => $this->method,
+            ] + ($opts->timeout > 0.01 ? [CURLOPT_TIMEOUT_MS => (int)(1000.0 * $opts->timeout)] : [])
+            + ($opts->body ? [CURLOPT_POSTFIELDS => $opts->body] : [])
+        );
 
-            $responseStr = curl_exec($curl);
+        $responseStr = curl_exec($curl);
+        $this->lastResponseCode = $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
-            $curlErrNo = curl_errno($curl);
-            $curlErrMsg = curl_error($curl);
-            $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $curlErrNo = curl_errno($curl);
+        $this->lastErrorMessage = $curlErrMsg = curl_error($curl);
 
-            curl_close($curl);
+        curl_close($curl);
 
+        if ($httpCode >= 200 && $httpCode < 300 && !$curlErrNo) {
             $this->timeoutOnce = null;
             $this->retriesOnceCount = null;
             $this->retriesOnceAwaitSecs = null;
 
-            $this->lastResponseCode = $httpCode;
-
-            if ($curlErrNo !== 0) {
-                $this->lastErrorMessage = $curlErrMsg;
-                throw new \RuntimeException('cURL error: ' . $curlErrMsg, $curlErrNo);
-            }
-
-            if ($this->isQuiteModeOnceForGetNotFoundApiError && 404 === $httpCode) {
-                $this->logAnError(self::LOG_ERR, Str::aClass($this), [
-                    'api' => $this->apiUri(),
-                    'queryForced' => $this->forcedQuery(),
-                ]);
-                return null;
-            }
-
-            if ($httpCode >= 400) {
-                $this->lastErrorMessage = is_string($responseStr) ? $responseStr : '';
-                throw new \RuntimeException('HTTP error: ' . $httpCode, $httpCode);
-            }
-
             return is_string($responseStr) ? $responseStr : null;
         }
-        catch (\Throwable $ex) {
-            $logArr = [
-                'endpoint' => $this->apiEndPoint(),
-                'ex' => ExceptionLog::toArray($ex),
-                'response' => is_string($responseStr ?? null) ? $responseStr : null,
-                'http_code' => $httpCode ?? null,
-                'curl_errno' => $curlErrNo ?? null,
-                'curl_error' => $curlErrMsg ?? null,
-            ];
-            $msg = static::logMsgForGuzzleException($httpCode, $curlErrNo, $curlErrMsg, $ex);
-            $this->logAnError(self::LOG_ERR, $msg, $logArr);
 
-            if ($this->retriesOnceCount > 0 && $this->retriesOnceAwaitSecs) {
-                sleep($this->retriesOnceAwaitSecs);
-                $this->retriesOnceCount--;
-                return $this->getResponseString($opts);
-            }
+        if (is_string($responseStr)) {
+            $this->lastErrorMessage .= ' ## RESPONSE ## ' . $responseStr;
         }
 
+        $logArr = [
+            'endpoint' => $this->apiEndPointForLog(),
+            'response' => is_string($responseStr ?? null) ? $responseStr : null,
+            'http_code' => $httpCode,
+            'curl_errno' => $curlErrNo,
+            'curl_error' => $curlErrMsg,
+        ];
+        $this->logAnError(self::LOG_ERROR, $this->logMsg($httpCode, $curlErrNo), $logArr);
+
+        if ($this->retriesOnceCount > 0) {
+            sleep($this->retriesOnceAwaitSecs);
+            $this->retriesOnceCount--;
+            return $this->sendRequestTakeResponse($opts);
+        }
         return null;
     }
 
-    public function apiUri(): string
-    {
-        return $this->apiServer() . $this->apiEndPoint();
-    }
+    /** CURL */
 
-    public function apiHeaders(): array
-    {
-        return [];
-    }
-
-    public function apiBearer(): ?string
-    {
-        return null;
-    }
-
-    public function apiBasic(): ?string
-    {
-        return null;
-    }
-
-    protected function requestFormatMode(): string
-    {
-        return self::CONTENT_TYPE_JSON;
-    }
-
-    private function responseFormatMode(): string // make protected when support other formats
-    {
-        return self::CONTENT_TYPE_JSON;
-    }
-
-    protected function finalQuery(): ?string
-    {
-        return $this->forcedQuery() ? http_build_query($this->forcedQuery()) : null;
-    }
-
-    protected function curlOptions(?array $body = null): CurlOptionsDto
+    protected final function curlOptions(?array $body = null): CurlOptionsDto
     {
         if ($body && self::CONTENT_TYPE_JSON == $this->requestFormatMode()) {
             $postBody = json_encode($body);
@@ -272,7 +242,21 @@ abstract class BaseApiModel extends BaseModel
         );
     }
 
-    protected function finalUnformattedHeaders(): array
+    protected function finalQuery(): ?string
+    {
+        return $this->forcedQuery() ? http_build_query($this->forcedQuery()) : null;
+    }
+
+    protected final function finalHeaders(): array
+    {
+        $headers = [];
+        foreach ($this->finalUnformattedHeaders() as $name => $val) {
+            $headers[] = $name . ': ' . $val;
+        }
+        return $headers;
+    }
+
+    protected final function finalUnformattedHeaders(): array
     {
         $base = [
             'Accept' => $this->responseFormatMode(),
@@ -294,42 +278,30 @@ abstract class BaseApiModel extends BaseModel
         return array_merge(static::HEADERS_DEFAULT, $base, $this->apiHeaders());
     }
 
-    protected function finalHeaders(): array
+    /** LOGs */
+
+    protected function logMsg(int $httpCode, int $curlErrNo): string
     {
-        $headers = [];
-        foreach ($this->finalUnformattedHeaders() as $name => $val) {
-            $headers[] = $name . ': ' . $val;
-        }
-        return $headers;
+        return $this->logPrefix($httpCode, $curlErrNo) . ' ' .
+            Str::aClass($this) . ' ' .
+            $httpCode . ' ' .
+            $this->apiServer() . $this->apiEndPointForLog();
     }
 
-    private function logMsgForGuzzleException(int $httpCode, int $curlErrNo, string $curlErrMsg, \Throwable $exception): string
+    protected const string LOG_PREFIX_CURL = 'Network-Fail-API';
+    protected const string LOG_PREFIX_404 = 'Not-Found-API';
+    protected const string LOG_PREFIX_500S = 'Server-Fail-API';
+    protected const string LOG_PREFIX_400S = 'Fail-API';
+    protected const string LOG_PREFIX_ELSE = 'Unexpected-Fail-API';
+    protected const string LOG_PREFIX_JSON = 'JSON-Parse-Fail-API';
+    protected function logPrefix(int $httpCode, int $curlErrNo): string
     {
-        $code = $httpCode ?: $exception->getCode();
-        $prefix = static::logPrefixForGuzzleException($code, $curlErrNo);
-
-        if ($httpCode > 0) {
-            return $prefix . $this->apiEndPointLogMsg() . ' ' . $httpCode . ' ' . $this->apiServer();
-        }
-
-        $msg = $curlErrMsg !== '' ? $curlErrMsg : $exception->getMessage();
-        return $prefix . $this->apiEndPointLogMsg() . ' ' . Str::aClass($exception) . ' - ' . $exception->getCode() . ' ' . $msg;
-    }
-
-    private static function logPrefixForGuzzleException(?int $code, int $curlErrNo): string
-    {
-        if (404 == $code) {
-            return 'Not-Found-API ';
-        }
-        if ($curlErrNo !== 0) {
-            return 'Connection-Fail-API ';
-        }
-        if (!empty($code) && $code >= 500) {
-            return 'Critical-Fail-API ';
-        }
-        if (!empty($code) && $code >= 400) {
-            return 'Fail-API ';
-        }
-        return 'Unexpected-Fail-API ';
+        return match (true) {
+            !!$curlErrNo     => static::LOG_PREFIX_CURL,
+            $httpCode == 404 => static::LOG_PREFIX_404,
+            $httpCode >= 500 => static::LOG_PREFIX_500S,
+            $httpCode >= 400 => static::LOG_PREFIX_400S,
+            default          => static::LOG_PREFIX_ELSE,
+        };
     }
 }

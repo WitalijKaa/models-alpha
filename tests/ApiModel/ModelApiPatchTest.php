@@ -7,13 +7,13 @@ namespace ModelsAlpha\Tests\ApiModel;
 use ModelsAlpha\Examples\Tests\ApiAb;
 use ModelsAlpha\Examples\Tests\ApiAd;
 
-final class ModelApiPostTest extends ModelApiMethods
+final class ModelApiPatchTest extends ModelApiMethods
 {
-    protected static string $fakeServerMethod = 'POST';
-    protected static string $methodSuffix = 'Post';
+    protected static string $fakeServerMethod = 'PATCH';
+    protected static string $methodSuffix = 'Patch';
 
     protected function callApi(ApiAd $request): ApiAb
     {
-        return ApiAb::apiVsPost($request);
+        return ApiAb::apiVsPatch($request);
     }
 }

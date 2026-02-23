@@ -16,6 +16,7 @@ final class ModelApiBasicTest extends AbstractApi
     public function testBasic(): void
     {
         $model = ApiAb::fromJsonStr(self::MODEL_A);
+        $this->assertSame('http://127.0.0.1:22022/alpha-a', $model->apiUri());
         $this->assertJsonStringEqualsJsonString(self::MODEL_A, $model->toApiJsonStr());
         $response = $model->apiVsGet();
         $this->assertJsonStringEqualsJsonString(self::MODEL_A, $response->toApiJsonStr());

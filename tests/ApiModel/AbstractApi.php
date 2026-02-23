@@ -19,6 +19,9 @@ abstract class AbstractApi extends TestCase
     protected static string $fakeCodeSuccess = '200';
     protected static string $fakeCodeError = '404';
     protected static string $fakeRequestBody = '{"create":"protected static string $fakeRequestBody"}';
+    protected static string $fakeQueryParams = '';
+    protected static float $fakeTimeout = 0.0;
+    protected static float $fakeRetries = 0;
 
     public static function setUpBeforeClass(): void
     {
@@ -46,16 +49,28 @@ abstract class AbstractApi extends TestCase
 
     private static function createFakeServer(): string
     {
+        static::clearRetries();
+
         $serverCode = str_replace('__FAKE_METHOD__', static::$fakeServerMethod, self::FAKE_SERVER_PHP);
         $serverCode = str_replace('__FAKE_API__', static::$fakeServerApi, $serverCode);
         $serverCode = str_replace('__FAKE_RESPONSE__', static::$fakeServerResponse, $serverCode);
         $serverCode = str_replace('__FAKE_CODE_SUCCESS__', static::$fakeCodeSuccess, $serverCode);
         $serverCode = str_replace('__FAKE_CODE_ERROR__', static::$fakeCodeError, $serverCode);
         $serverCode = str_replace('__FAKE_REQUEST_BODY__', static::$fakeRequestBody, $serverCode);
+        $serverCode = str_replace('__FAKE_QUERY__', static::$fakeQueryParams, $serverCode);
+        $serverCode = str_replace('__FAKE_TIMEOUT__', (string)static::$fakeTimeout, $serverCode);
+        $serverCode = str_replace('__RETRIES_FILE_CACHE_PATH__', static::retriesPath(), $serverCode);
         $filePath = tempnam(sys_get_temp_dir(), 'phpunit_stub_');
         file_put_contents($filePath, $serverCode);
         return $filePath;
     }
+
+    protected static function clearRetries(): void
+    {
+        file_put_contents(static::retriesPath(), static::$fakeRetries);
+    }
+
+    private static function retriesPath(): string { return __DIR__ . '/../../logs/count_retries.log'; }
 
     private static function fakeServerDescriptors(): array
     {
@@ -85,6 +100,10 @@ private const string FAKE_SERVER_PHP = <<<'TEMP_FILE_CONTENT'
 <?php
 $targetApi = '/__FAKE_API__';
 $targetMethod = '__FAKE_METHOD__';
+$targetQuery = '__FAKE_QUERY__';
+$targetTimeout = __FAKE_TIMEOUT__;
+$retriesFile = '__RETRIES_FILE_CACHE_PATH__';
+$targetRetries = (int)file_get_contents($retriesFile);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $body = file_get_contents('php://input') ?: '';
@@ -97,8 +116,31 @@ if ($path === '/alpha-a-api-ready') {
 
 $isSuccess = $method === $targetMethod && $path === $targetApi;
 
-if ($method === 'POST' && !str_contains($body, '__FAKE_REQUEST_BODY__')) {
+if (in_array($method, ['POST', 'PUT', 'PATCH']) && !str_contains($body, '__FAKE_REQUEST_BODY__')) {
     $isSuccess = false;
+}
+
+if ($targetQuery) {
+    $query = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_QUERY) ?? '';
+    parse_str($query, $queryParams);
+    parse_str($targetQuery, $targetQueryParams);
+
+    foreach ($targetQueryParams as $K => $value) {
+        if (!isset($queryParams[$K]) || (string)$queryParams[$K] != (string)$value) {
+            $isSuccess = false;
+            break;
+        }
+    }
+}
+
+if ($targetTimeout > 0.1) {
+    usleep(1_000_000 * $targetTimeout);
+}
+
+if ($targetRetries > 0) {
+    $targetRetries--;
+    $isSuccess = false;
+    file_put_contents($retriesFile, $targetRetries);
 }
 
 http_response_code($isSuccess ? __FAKE_CODE_SUCCESS__ : __FAKE_CODE_ERROR__);

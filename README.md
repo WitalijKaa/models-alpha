@@ -2,6 +2,7 @@
 
 ```
 php vendor/bin/phpunit
+php vendor/bin/phpunit --testdox
 php vendor/bin/phpunit --coverage-text
 
 php vendor/bin/phpunit --testdox --testsuite Api

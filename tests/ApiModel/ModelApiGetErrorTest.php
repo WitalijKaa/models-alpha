@@ -29,7 +29,6 @@ final class ModelApiGetErrorTest extends AbstractApi
         $model = $this->getMockBuilder(ApiAc::class)
             ->onlyMethods(['logAnError'])
             ->getMock();
-        //$model->parseJsonStr(self::MODEL_A);
 
         $model->expects($this->once())
             ->method('logAnError')

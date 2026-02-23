@@ -18,8 +18,18 @@ class ApiAb extends ApiAa
         return static::apiGet();
     }
 
-    public static function apiVsPost(ApiAd $body): static
+    public static function apiVsPost(ApiAd $request): static
     {
-        return static::apiPost($body->toArray());
+        return static::apiPost($request->toArray());
+    }
+
+    public static function apiVsPut(ApiAd $request): static
+    {
+        return static::apiPut($request->toArray());
+    }
+
+    public static function apiVsPatch(ApiAd $request): static
+    {
+        return static::apiPatch($request->toArray());
     }
 }

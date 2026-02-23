@@ -113,16 +113,6 @@ class ReflectionProperty
         }
     }
 
-    private function hasAttribute(array $refAttrs, string $attr): bool
-    {
-        return array_any($refAttrs, fn($refAttr) => $refAttr->getName() == $attr);
-    }
-
-    private function findAttribute(array $refAttrs, string $attr): ?\ReflectionAttribute
-    {
-        return array_find($refAttrs, fn($refAttr) => $refAttr->getName() == $attr);
-    }
-
     private function findSubClassesFromReflectionAttributes(array $refAttrs, array $config): array
     {
         $return = [];

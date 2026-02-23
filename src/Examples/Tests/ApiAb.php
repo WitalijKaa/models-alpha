@@ -13,8 +13,13 @@ class ApiAb extends ApiAa
     #[PreventToArrayOnNull]
     public int $someInt;
 
-    public static function api(): static
+    public static function apiVsGet(): static
     {
         return static::apiGet();
+    }
+
+    public static function apiVsPost(ApiAd $body): static
+    {
+        return static::apiPost($body->toArray());
     }
 }

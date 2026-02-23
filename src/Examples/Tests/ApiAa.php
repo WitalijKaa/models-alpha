@@ -20,7 +20,7 @@ abstract class ApiAa extends BaseApiModel
 
     protected function logAnError(string $level, string $message, array $logArr): void
     {
-        $filePath = '/logs/Tests-' . date('Y-m-d') . '.log';
+        $filePath = dirname(__DIR__, 3) . '/logs/Tests-' . date('Y-m-d') . '.log';
         $line = sprintf('[%s] %s: %s #### %s',
             date('Y-m-d H:i:s'),
             $level,

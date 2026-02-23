@@ -3,6 +3,7 @@
 namespace ModelsAlpha;
 
 use ModelsAlpha\Core\CurlOptionsDto;
+use ModelsAlpha\Exceptions\ApiException;
 use ModelsAlpha\Helpers\ExceptionLog;
 use ModelsAlpha\Helpers\Str;
 
@@ -109,7 +110,7 @@ abstract class BaseApiModel extends BaseModel
         $model = new static();
         $response = $model->sendGet();
         if (is_null($response)) {
-            throw new \HttpException($model->errorMsg(), $model->errorCode());
+            throw ApiException::api(Str::aClass($model) . ' GET', $model->errorMsg(), $model->errorCode());
         }
         return static::fromArray($response);
     }
@@ -127,12 +128,18 @@ abstract class BaseApiModel extends BaseModel
         return $this->getResponse();
     }
 
+    public final function successGet(): bool
+    {
+        $this->sendGet();
+        return $this->isLastResponseSuccess();
+    }
+
     public static final function apiPost(array $body): static
     {
         $model = new static();
         $response = $model->sendPost($body);
         if (is_null($response)) {
-            throw new \HttpException($model->errorMsg(), $model->errorCode());
+            throw ApiException::api(Str::aClass($model) . ' POST', $model->errorMsg(), $model->errorCode());
         }
         return static::fromArray($response);
     }
@@ -161,7 +168,7 @@ abstract class BaseApiModel extends BaseModel
         $model = new static();
         $response = $model->sendPut($body);
         if (is_null($response)) {
-            throw new \HttpException($model->errorMsg(), $model->errorCode());
+            throw ApiException::api(Str::aClass($model) . ' PUT', $model->errorMsg(), $model->errorCode());
         }
         return static::fromArray($response);
     }
@@ -190,7 +197,7 @@ abstract class BaseApiModel extends BaseModel
         $model = new static();
         $response = $model->sendPatch($body);
         if (is_null($response)) {
-            throw new \HttpException($model->errorMsg(), $model->errorCode());
+            throw ApiException::api(Str::aClass($model) . ' PATCH', $model->errorMsg(), $model->errorCode());
         }
         return static::fromArray($response);
     }
@@ -275,17 +282,10 @@ abstract class BaseApiModel extends BaseModel
         }
 
         if (is_string($responseStr)) {
-            $this->lastErrorMessage .= ' ## RESPONSE ## ' . $responseStr;
+            $this->lastErrorMessage .= trim($this->lastErrorMessage) ? ' ## RESPONSE ## ' . $responseStr : $responseStr;
         }
 
-        $logArr = [
-            'endpoint' => $this->apiEndPointForLog(),
-            'response' => is_string($responseStr ?? null) ? $responseStr : null,
-            'http_code' => $httpCode,
-            'curl_errno' => $curlErrNo,
-            'curl_error' => $curlErrMsg,
-        ];
-        $this->logAnError(self::LOG_ERROR, $this->logMsg($httpCode, $curlErrNo), $logArr);
+        $this->logAnError(self::LOG_ERROR, $this->logMsg($httpCode, $curlErrNo), $this->logBody($responseStr, $curlErrNo, $curlErrMsg));
 
         if ($this->retriesOnceCount > 0) {
             sleep($this->retriesOnceAwaitSecs);
@@ -358,6 +358,34 @@ abstract class BaseApiModel extends BaseModel
             Str::aClass($this) . ' ' .
             $httpCode . ' ' .
             $this->apiServer() . $this->apiEndPointForLog();
+    }
+
+    protected function logBody(mixed $responseStr, int $curlErrNo, string $curlErrMsg): array
+    {
+        $logArr = [] + ($curlErrNo ? ['curl_errno' => $curlErrNo] : []) + ($curlErrMsg ? ['curl_error' => $curlErrMsg] : []);
+        if (is_string($responseStr)) {
+
+            if (!$responseStr && !$logArr) {
+                return ['response' => 'EMPTY'];
+            }
+            else if (!$responseStr) {
+                $logArr['response'] = 'EMPTY';
+                return $logArr;
+            }
+
+            try {
+                $responseArr = json_decode($responseStr, true, 512, JSON_THROW_ON_ERROR);
+                if ($logArr) {
+                    $logArr['response'] = $responseArr;
+                } else {
+                    $logArr = $responseArr;
+                }
+            }
+            catch (\Throwable) {
+                $logArr['response'] = $responseStr;
+            }
+        }
+        return $logArr;
     }
 
     protected const string LOG_PREFIX_CURL = 'Network-Fail-API';

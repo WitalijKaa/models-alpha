@@ -5,8 +5,14 @@
     cacheDirectory=".phpunit.cache">
 
     <testsuites>
-        <testsuite name="ModelsAlpha Test Suite">
-            <directory>tests</directory>
+        <testsuite name="Models">
+            <directory>tests/Model</directory>
+        </testsuite>
+        <testsuite name="Api">
+            <directory>tests/ApiModel</directory>
+        </testsuite>
+        <testsuite name="Helpers">
+            <directory>tests/Helpers</directory>
         </testsuite>
     </testsuites>
     <source>
